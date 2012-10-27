@@ -12,12 +12,6 @@ width = 100
 height = 100
 
 
-def all_cells():
-    for y in range(height):
-        for x in range(width):
-            yield (y, x)
-
-
 def is_alive(state, pos):
     return state.get(pos, False)
 
@@ -73,50 +67,59 @@ def evolve(state):
 
 
 def update_display(stdscr, state):
-    for pos in all_cells():
-        try:
-            cell_state = is_alive(state, pos)
-            if cell_state:
-                char = 'X'
-            else:
-                char = '.'
+    dimensions = stdscr.getmaxyx()
+    for y in range(dimensions[0]):
+        for x in range(dimensions[1]):
+            pos = (y, x)
+            try:
+                cell_state = is_alive(state, pos)
+                if cell_state:
+                    char = 'X'
+                else:
+                    char = ' '
 
-            stdscr.addch(pos[0], pos[1], char)
-        except curses.error:
-            pass
+                stdscr.addch(pos[0], pos[1], char)
+            except curses.error:
+                pass
 
     stdscr.refresh()
 
 
-def update_debug_display(state):
-    for y in range(height):
-        line = ''
-        for x in range(width):
-            #line += str(num_neighbours(state, (y, x)))
-            line += 'X' if is_alive(state, (y, x)) else '-'
-        print line
+# def update_debug_display(state):
+#     for y in range(height):
+#         line = ''
+#         for x in range(width):
+#             line += 'X' if is_alive(state, (y, x)) else '-'
+#         print line
 
-    print '====================='
+#     print '====================='
+
+
+def set_state(state, coords, start_pos=None):
+    if start_pos is None:
+        start_pos = (0, 0)
+
+    for pos in coords:
+        state[(start_pos[0] + pos[0], start_pos[1] + pos[1])] = True
+
+    return state
 
 
 def main(stdscr=None):
     state = {}
 
-    coords = [(1, 0), (2, 1), (2, 2), (1, 2), (0, 2)]  # glider
-    #coords = [(0, 1), (1, 1), (2, 1)]  # traffic light
-    for pos in coords:
-        state[pos] = True
+    #glider = [(1, 0), (2, 1), (2, 2), (1, 2), (0, 2)]
+    #blinker = [(0, 1), (1, 1), (2, 1)]
+    rpentomino = [(1, 0), (2, 1), (1, 1), (0, 1), (0, 2)]
+
+    dimensions = stdscr.getmaxyx()
+    midpoint = (dimensions[0] / 2, dimensions[1] / 2)
+
+    state = set_state(state, rpentomino, midpoint)
 
     while(True):
-        if stdscr:
-            update_display(stdscr, state)
-        else:
-            update_debug_display(state)
-
+        update_display(stdscr, state)
         state = evolve(state)
         time.sleep(0.1)
 
-if not DEBUG:
-    curses.wrapper(main)
-else:
-    main()
+curses.wrapper(main)
