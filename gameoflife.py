@@ -68,32 +68,47 @@ def main(stdscr=None):
             if stdscr.getch() != curses.ERR:
                 quit_requested = True
 
+            # on even iterations, fire up the loop detector
             if iterations % 2 == 0:
                 loop_detection_this_state = ""
             else:
                 loop_detection_this_state = None
 
 
+            # cycle through all (y, x) positions on the screen
             for y, x in itertools.product(range(max_y), range(max_x)):
                 try:
+                    # determine whether we are printing a char or a space
                     char = ALIVE_CHAR if (y, x) in alive_cells else ' '
+
+                    # add it to the screen
                     stdscr.addch(y, x, char)
                     
+                    # if we're doing loop detection, add the character
                     if loop_detection_this_state is not None:
                         loop_detection_this_state += char
                 except curses.error:
+                    #TODO!: determine what causes these occasional exceptions
                     pass
-
-            if loop_detection_this_state:
-                if loop_detection_this_state == loop_detection_last_state:
-                    loop_counter += 1
-                else:
-                    loop_counter = 0
-
-                loop_detection_last_state = loop_detection_this_state
-
+            
+            # refresh the screen
             stdscr.refresh()
 
+            # if we're in loop detection mode
+            if loop_detection_this_state:
+                # check if this iteration matches the one from 2 iterations ago
+                if loop_detection_this_state == loop_detection_last_state:
+                    # if it's the same, bump our loop counter
+                    loop_counter += 1
+                else:
+                    # otherwise reset it
+                    loop_counter = 0
+
+                # now stash the current state for the next time we check
+                loop_detection_last_state = loop_detection_this_state
+
+
+            # now determine what cells survive, die, or are born
             next_alive_cells = set()
 
             for yx in alive_cells | set.union(*map(get_neighbours, alive_cells)):
@@ -108,11 +123,12 @@ def main(stdscr=None):
 
             alive_cells = next_alive_cells
             
+            # on the first iteration pause briefly to show the initial state
             if iterations == 0:
-                # on the first iteration pause briefly to show the initial state
                 time.sleep(PREVIEW_PAUSE_SECONDS)
+            
+            # otherwise a very small pause
             else:
-                # otherwise a very small pause
                 time.sleep(ITERATION_PAUSE)
             
             iterations += 1
