@@ -1,125 +1,101 @@
 import curses
+import itertools
 import time
 
-# live with 0-1 neighbours: die
-# live with 2-3 neighbours: live
-# live with 4+ neighbours: die
-# dead with 3 neighbours: live
+PATTERNS = [
+    #blinker
+    [(0, 1), (1, 1), (2, 1)],
 
-DEBUG = False
+    #glider
+    [(1, 0), (2, 1), (2, 2), (1, 2), (0, 2)],    
+    
+    #rpentomino
+    [(1, 0), (2, 1), (1, 1), (0, 1), (0, 2)]
+]
 
-width = 100
-height = 100
-
-
-def is_alive(state, pos):
-    return state.get(pos, False)
-
-
-def get_relative_neighbours():
-    for dx in range(-1, 2):
-        for dy in range(-1, 2):
-            if not (dx == 0 and dy == 0):
-                yield (dy, dx)
+MAX_LOOPS = 10
+ALIVE_CHAR = 'O'
 
 
-def get_neighbours(pos):
-    '''Returns a generator that yields neighbour positions'''
-    for nrel in get_relative_neighbours():
-        yield (pos[0] + nrel[0], pos[1] + nrel[1])
-
-
-def num_neighbours(state, pos):
-    return sum(int(is_alive(state, npos)) for npos in get_neighbours(pos))
-
-
-def outcome(alive, neighbours):
-    if alive:
-        if neighbours < 2 or neighbours > 3:
-            new_cell_state = False
-        else:
-            new_cell_state = True
-    else:
-        if neighbours == 3:
-            new_cell_state = True
-        else:
-            new_cell_state = False
-
-    return new_cell_state
-
-
-def evolve(state):
-    new_state = {}
-
-    cells_to_check = []
-    for pos in [pos for pos in state if state[pos]]:
-        if pos not in cells_to_check:
-            cells_to_check.append(pos)
-
-        for npos in get_neighbours(pos):
-            if npos not in cells_to_check:
-                cells_to_check.append(npos)
-
-    for pos in cells_to_check:
-        new_state[pos] = outcome(is_alive(state, pos), num_neighbours(state, pos))
-
-    return new_state
-
-
-def update_display(stdscr, state):
-    dimensions = stdscr.getmaxyx()
-    for y in range(dimensions[0]):
-        for x in range(dimensions[1]):
-            pos = (y, x)
-            try:
-                cell_state = is_alive(state, pos)
-                if cell_state:
-                    char = 'X'
-                else:
-                    char = ' '
-
-                stdscr.addch(pos[0], pos[1], char)
-            except curses.error:
-                pass
-
-    stdscr.refresh()
-
-
-# def update_debug_display(state):
-#     for y in range(height):
-#         line = ''
-#         for x in range(width):
-#             line += 'X' if is_alive(state, (y, x)) else '-'
-#         print line
-
-#     print '====================='
-
-
-def set_state(state, coords, start_pos=None):
-    if start_pos is None:
-        start_pos = (0, 0)
-
-    for pos in coords:
-        state[(start_pos[0] + pos[0], start_pos[1] + pos[1])] = True
-
-    return state
-
+def get_neighbours(yx):
+    return set(
+        (yx[0] + dy, yx[1] + dx)
+        for dx in range(-1, 2)
+        for dy in range(-1, 2)
+        if not (dx == 0 and dy == 0)
+    )
 
 def main(stdscr=None):
-    state = {}
+    stdscr.nodelay(True)
+    max_y, max_x = stdscr.getmaxyx()
+    quit_requested = False
 
-    #glider = [(1, 0), (2, 1), (2, 2), (1, 2), (0, 2)]
-    #blinker = [(0, 1), (1, 1), (2, 1)]
-    rpentomino = [(1, 0), (2, 1), (1, 1), (0, 1), (0, 2)]
+    for pattern in itertools.cycle(PATTERNS):
+        if quit_requested:
+            break;
 
-    dimensions = stdscr.getmaxyx()
-    midpoint = (dimensions[0] / 2, dimensions[1] / 2)
+        alive_cells = set(
+            (max_y // 2 + y, max_x // 2 + x)
+            for y, x in pattern
+        )
 
-    state = set_state(state, rpentomino, midpoint)
+        iterations = 0
+        loop_counter = 0
 
-    while(True):
-        update_display(stdscr, state)
-        state = evolve(state)
-        time.sleep(0.1)
+        loop_detection_last_state = None
+        
+        while(loop_counter < MAX_LOOPS):
+            # check for user key press, if any found, quit
+            if stdscr.getch() != curses.ERR:
+                quit_requested = True
+                break
 
-curses.wrapper(main)
+            if iterations % 2 == 0:
+                loop_detection_this_state = ""
+            else:
+                loop_detection_this_state = None
+
+
+            for y, x in itertools.product(range(max_y), range(max_x)):
+                try:
+                    char = ALIVE_CHAR if (y, x) in alive_cells else ' '
+                    stdscr.addch(y, x, char)
+                    
+                    if loop_detection_this_state is not None:
+                        loop_detection_this_state += char
+                except curses.error:
+                    pass
+
+            if loop_detection_this_state:
+                if loop_detection_this_state == loop_detection_last_state:
+                    loop_counter += 1
+                else:
+                    loop_counter = 0
+
+                loop_detection_last_state = loop_detection_this_state
+
+            stdscr.refresh()
+
+            next_alive_cells = set()
+
+            for yx in alive_cells | set.union(*map(get_neighbours, alive_cells)):
+                num_living_neighbours = len(alive_cells & get_neighbours(yx))
+
+                if (
+                    (yx in alive_cells and 2 <= num_living_neighbours <= 3) 
+                    or 
+                    (yx not in alive_cells and num_living_neighbours == 3)
+                ):
+                    next_alive_cells.add(yx)
+
+            alive_cells = next_alive_cells
+            
+            if iterations == 0:
+                time.sleep(2)
+            else:
+                time.sleep(0.05)
+            
+            iterations += 1
+
+if __name__ == '__main__':
+    curses.wrapper(main)
