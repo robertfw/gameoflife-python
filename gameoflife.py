@@ -6,16 +6,32 @@ PATTERNS = [
     #blinker
     [(0, 1), (1, 1), (2, 1)],
 
+    #toad
+    [(0, 1), (0, 2), (0, 3), (1, 0), (1, 1), (1, 2)],
+
+    #beacon
+    [(0,0), (0, 1), (1, 0), (2, 3), (3, 2), (3, 3)],
+
     #glider
     [(1, 0), (2, 1), (2, 2), (1, 2), (0, 2)],    
     
     #rpentomino
-    [(1, 0), (2, 1), (1, 1), (0, 1), (0, 2)]
+    [(1, 0), (2, 1), (1, 1), (0, 1), (0, 2)],
+
+    #diehard
+    [(0, 6), (1, 0), (1, 1), (2, 1), (2, 5), (2, 6), (2, 7)],
+
+    #acorn
+    [(0, 1), (1, 3), (2, 0), (2, 1), (2, 4), (2, 5), (2, 6)],
 ]
 
 MAX_LOOPS = 10
+MAX_ITERATIONS = 5206 + MAX_LOOPS  # acorn is the longest lived @5206 iterations
 ALIVE_CHAR = 'O'
 
+PREVIEW_PAUSE_SECONDS = 1.5
+OUTRO_PAUSE_SECONDS = 1.5
+ITERATION_PAUSE = 0.1
 
 def get_neighbours(yx):
     return set(
@@ -29,26 +45,28 @@ def main(stdscr=None):
     stdscr.nodelay(True)
     max_y, max_x = stdscr.getmaxyx()
     quit_requested = False
+    pattern_cycle = itertools.cycle(PATTERNS)
 
-    for pattern in itertools.cycle(PATTERNS):
-        if quit_requested:
-            break;
-
+    while(not quit_requested):
         alive_cells = set(
             (max_y // 2 + y, max_x // 2 + x)
-            for y, x in pattern
+            for y, x in next(pattern_cycle)
         )
 
         iterations = 0
         loop_counter = 0
 
+        # TODO!: loop detection only detects period=2 loops
         loop_detection_last_state = None
         
-        while(loop_counter < MAX_LOOPS):
+        while(alive_cells 
+              and iterations < MAX_ITERATIONS 
+              and loop_counter < MAX_LOOPS 
+              and not quit_requested
+        ):
             # check for user key press, if any found, quit
             if stdscr.getch() != curses.ERR:
                 quit_requested = True
-                break
 
             if iterations % 2 == 0:
                 loop_detection_this_state = ""
@@ -91,11 +109,18 @@ def main(stdscr=None):
             alive_cells = next_alive_cells
             
             if iterations == 0:
-                time.sleep(2)
+                # on the first iteration pause briefly to show the initial state
+                time.sleep(PREVIEW_PAUSE_SECONDS)
             else:
-                time.sleep(0.05)
+                # otherwise a very small pause
+                time.sleep(ITERATION_PAUSE)
             
             iterations += 1
+
+        # if we're not quitting we're resetting after a loop was detected
+        # pause briefly to show the final state
+        if not quit_requested:
+            time.sleep(OUTRO_PAUSE_SECONDS)
 
 if __name__ == '__main__':
     curses.wrapper(main)
